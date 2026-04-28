@@ -1,0 +1,6 @@
+{
+  "name": "Global Price Settings",
+  "description": "An admin dashboard to manage item pricing across different countries and currencies. Features automatic dynamic pricing and explicit currency overrides.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
