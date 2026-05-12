@@ -33,6 +33,7 @@ export const DEFAULT_RESPONSES: Omit<AIResponse, 'id' | 'createdAt' | 'updatedAt
   },
 ];
 
+
 export const DEFAULT_MEOW_CONFIG: Omit<MeowDialogueConfig, 'timingConfigs'> & {
   timingConfigs: NonNullable<MeowDialogueConfig['timingConfigs']>;
 } = {

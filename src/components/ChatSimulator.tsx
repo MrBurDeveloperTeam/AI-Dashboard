@@ -7,6 +7,8 @@ import {
   Search, Lightbulb, Star, Box, MessageCircle, Info, Settings, Clock, Activity, Cloud,
   Heart, ThumbsUp, ShoppingCart, Users, Folder, ChevronDown
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const AVAILABLE_ICONS: Record<string, React.ElementType> = {
   Zap, ShieldCheck, AlertCircle, BarChart3,
@@ -60,7 +62,12 @@ export default function ChatSimulator() {
     setIsLoading(true);
 
     try {
-      const responseText = await simulateChat(textToSend, responses, activeModule);
+      const chatHistory = messages.map(msg => ({
+        role: (msg.role === 'user' ? 'user' : 'model') as 'user' | 'model',
+        parts: [{ text: msg.content }]
+      }));
+
+      const responseText = await simulateChat(textToSend, responses, activeModule, chatHistory);
       setMessages(prev => [
         ...prev,
         { id: crypto.randomUUID(), role: 'assistant', content: responseText, timestamp: Date.now() }
@@ -209,7 +216,25 @@ export default function ChatSimulator() {
                         ? 'bg-primary text-white' 
                         : 'bg-white border border-slate-200 text-slate-800'
                     }`}>
-                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                      {msg.role === 'user' ? (
+                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                      ) : (
+                        <div className="markdown-content">
+                          <ReactMarkdown 
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                              ul: ({node, ...props}) => <ul className="list-disc ml-4 mb-2" {...props} />,
+                              ol: ({node, ...props}) => <ol className="list-decimal ml-4 mb-2" {...props} />,
+                              li: ({node, ...props}) => <li className="mb-1" {...props} />,
+                              strong: ({node, ...props}) => <strong className="font-bold" {...props} />,
+                              h3: ({node, ...props}) => <h3 className="text-sm font-bold mt-2 mb-1" {...props} />,
+                            }}
+                          >
+                            {msg.content}
+                          </ReactMarkdown>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

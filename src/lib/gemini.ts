@@ -1,6 +1,12 @@
 import { AIResponse } from '../types';
+import { chatWithGemini, ChatHistory } from './geminiService';
 
-export async function simulateChat(message: string, predefinedResponses: AIResponse[], activeModule: string): Promise<string> {
+export async function simulateChat(
+  message: string, 
+  predefinedResponses: AIResponse[], 
+  activeModule: string,
+  history: ChatHistory[] = []
+): Promise<string> {
   const activeResponses = predefinedResponses.filter(r => 
     r.status === 'active' && 
     (!r.targetApp || r.targetApp.length === 0 || r.targetApp.includes('All') || r.targetApp.includes(activeModule))
@@ -19,5 +25,6 @@ export async function simulateChat(message: string, predefinedResponses: AIRespo
     }
   }
 
-  return "I don't have a predefined response for that. Please try asking something else.";
+  // If no predefined response found, fall back to Gemini
+  return await chatWithGemini(history, message, activeModule);
 }

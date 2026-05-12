@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -31,4 +32,9 @@
 }
 .scrollbar-none::-webkit-scrollbar {
   display: none;
+}
+
+/* Virtual Pet Ecosystem Defaults */
+.pet-interface {
+  font-family: 'Fredoka', sans-serif;
 }
