@@ -139,6 +139,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  // Guards against StrictMode's double-invoke (and any other re-fire for the
+  // same userId) calling seedUserDefaults more than once concurrently.
+  const seededUserIdRef = useRef<string | null>(null);
+
   // ── Load data once we have a userId ───────────────────────────────────────
   useEffect(() => {
     if (!userId) {
@@ -149,8 +153,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     (async () => {
       setIsLoading(true);
 
-      // Seed defaults if first time
-      await seedUserDefaults(userId);
+      // Seed defaults if first time (guarded so it only ever runs once per userId)
+      if (seededUserIdRef.current !== userId) {
+        seededUserIdRef.current = userId;
+        await seedUserDefaults(userId);
+      }
 
       // Parallel fetches
       const [respResult, simResult, meowResult, pricingResult, pricingItemsResult] = await Promise.all([
@@ -347,72 +354,91 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [userId, activeModule, simulatorConfigs]);
 
   // ── Meow Config ───────────────────────────────────────────────────────────
+  // Tracks the latest merged config synchronously (unlike React state, a ref
+  // updates immediately), so back-to-back calls — e.g. every keystroke in the
+  // timing inputs — always merge on top of the freshest value instead of a
+  // stale closure from before the previous call's setState landed.
+  const meowConfigRef = useRef(meowConfig);
+  useEffect(() => { meowConfigRef.current = meowConfig; }, [meowConfig]);
+
+  const updateMeowTimeout = useRef<NodeJS.Timeout | null>(null);
+
   const updateMeowConfig = useCallback(async (updates: Partial<MeowDialogueConfig>) => {
     if (!userId) return;
-    const merged = { ...meowConfig, ...updates };
+    const merged = { ...meowConfigRef.current, ...updates };
 
     // Optimistic update
+    meowConfigRef.current = merged;
     setMeowConfig(merged);
 
-    const { data: meowData } = await supabase
-      .from('aiboard_meow_configs')
-      .upsert({ user_id: userId }, { onConflict: 'user_id' })
-      .select()
-      .single();
+    // Debounce the actual persistence: coalesce rapid-fire calls (e.g. typing
+    // in the timing inputs) into a single delete+insert cycle using the
+    // latest merged state, instead of letting multiple overlapping
+    // delete-then-insert calls race and duplicate or drop rows.
+    if (updateMeowTimeout.current) clearTimeout(updateMeowTimeout.current);
+    updateMeowTimeout.current = setTimeout(async () => {
+      const latest = meowConfigRef.current;
 
-    if (meowData) {
-      await supabase.from('aiboard_meow_messages').delete().eq('config_id', meowData.id);
-      await supabase.from('aiboard_meow_timing').delete().eq('config_id', meowData.id);
+      const { data: meowData } = await supabase
+        .from('aiboard_meow_configs')
+        .upsert({ user_id: userId }, { onConflict: 'user_id' })
+        .select()
+        .single();
 
-      const states = ['Normal', 'Hungry', 'Unhappy', 'Dirty', 'Low Energy', 'Audio'] as const;
-      const messagesToInsert: any[] = [];
-      const timingsToInsert: any[] = [];
+      if (meowData) {
+        await supabase.from('aiboard_meow_messages').delete().eq('config_id', meowData.id);
+        await supabase.from('aiboard_meow_timing').delete().eq('config_id', meowData.id);
 
-      for (const state of states) {
-        const msgs = merged[state] as string[];
-        if (msgs) {
-          msgs.forEach((msg, i) => {
-            const isAudio = state === 'Audio';
-            let msgText = msg;
-            let audioName = null;
-            if (isAudio) {
-               try {
-                 const parsed = JSON.parse(msg);
-                 msgText = parsed.url;
-                 audioName = parsed.name;
-               } catch (e) { }
-            }
-            messagesToInsert.push({
+        const states = ['Normal', 'Hungry', 'Unhappy', 'Dirty', 'Low Energy', 'Audio'] as const;
+        const messagesToInsert: any[] = [];
+        const timingsToInsert: any[] = [];
+
+        for (const state of states) {
+          const msgs = latest[state] as string[];
+          if (msgs) {
+            msgs.forEach((msg, i) => {
+              const isAudio = state === 'Audio';
+              let msgText = msg;
+              let audioName = null;
+              if (isAudio) {
+                 try {
+                   const parsed = JSON.parse(msg);
+                   msgText = parsed.url;
+                   audioName = parsed.name;
+                 } catch (e) { }
+              }
+              messagesToInsert.push({
+                config_id: meowData.id,
+                state: state,
+                message: msgText,
+                is_audio: isAudio,
+                audio_name: audioName,
+                sort_order: i
+              });
+            });
+          }
+
+          const timing = latest.timingConfigs[state];
+          if (timing) {
+            timingsToInsert.push({
               config_id: meowData.id,
               state: state,
-              message: msgText,
-              is_audio: isAudio,
-              audio_name: audioName,
-              sort_order: i
+              message_duration_minutes: timing.messageDurationMinutes,
+              message_interval_minutes: timing.messageIntervalMinutes,
+              disabled: timing.disabled || false
             });
-          });
+          }
         }
 
-        const timing = merged.timingConfigs[state];
-        if (timing) {
-          timingsToInsert.push({
-            config_id: meowData.id,
-            state: state,
-            message_duration_minutes: timing.messageDurationMinutes,
-            message_interval_minutes: timing.messageIntervalMinutes,
-            disabled: timing.disabled || false
-          });
+        if (messagesToInsert.length > 0) {
+          await supabase.from('aiboard_meow_messages').insert(messagesToInsert);
+        }
+        if (timingsToInsert.length > 0) {
+          await supabase.from('aiboard_meow_timing').insert(timingsToInsert);
         }
       }
-
-      if (messagesToInsert.length > 0) {
-        await supabase.from('aiboard_meow_messages').insert(messagesToInsert);
-      }
-      if (timingsToInsert.length > 0) {
-        await supabase.from('aiboard_meow_timing').insert(timingsToInsert);
-      }
-    }
-  }, [userId, meowConfig]);
+    }, 500);
+  }, [userId]);
 
   // ── Pricing Currencies ────────────────────────────────────────────────────
   const updatePricingCurrenciesTimeout = useRef<NodeJS.Timeout | null>(null);

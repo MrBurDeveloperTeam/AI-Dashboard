@@ -206,6 +206,13 @@ export const GameStateProvider: React.FC<{ children: React.ReactNode; currencyCo
                         if (petData.pet_name) setPetName(petData.pet_name);
                         if (petData.pet_color) setPetColor(petData.pet_color as PetColor);
                         if (petData.active_ball_id) setActiveBallId(petData.active_ball_id);
+                    } else if (!petData && !petErr) {
+                        setStats(INITIAL_STATS);
+                        setPetName("Molar");
+                        setPetColor(PetColor.POTATO);
+                        setInventory(INITIAL_INVENTORY);
+                        setIsSleeping(false);
+                        setActiveBallId('ball_red');
                     }
 
                     const { data: invData, error: invErr } = await supabase

@@ -154,67 +154,70 @@ export async function seedUserDefaults(userId: string): Promise<void> {
     }
   }
 
-  // 3. Meow config
-  const { count: meowCount } = await supabase
+  // 3. Meow config — atomic upsert instead of check-then-insert.
+  // `ignoreDuplicates: true` makes this an INSERT ... ON CONFLICT (user_id) DO NOTHING
+  // at the database level, so if two callers race, only the one that actually
+  // inserts the row gets it back from .select(); the loser gets null and skips
+  // seeding messages, so default messages can never be inserted twice.
+  const { data: meowData, error: meowUpsertError } = await supabase
     .from('aiboard_meow_configs')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', userId);
+    .upsert({ user_id: userId }, { onConflict: 'user_id', ignoreDuplicates: true })
+    .select()
+    .maybeSingle();
 
-  if ((meowCount ?? 0) === 0) {
-    const { data: meowData } = await supabase.from('aiboard_meow_configs').insert({
-      user_id: userId
-    }).select().single();
+  if (meowUpsertError) {
+    console.error('Error seeding meow config:', meowUpsertError);
+  }
 
-    if (meowData) {
-      const cfg = DEFAULT_MEOW_CONFIG;
-      const states = ['Normal', 'Hungry', 'Unhappy', 'Dirty', 'Low Energy', 'Audio'] as const;
-      
-      const messagesToInsert: any[] = [];
-      const timingsToInsert: any[] = [];
+  if (meowData) {
+    const cfg = DEFAULT_MEOW_CONFIG;
+    const states = ['Normal', 'Hungry', 'Unhappy', 'Dirty', 'Low Energy', 'Audio'] as const;
 
-      for (const state of states) {
-        const msgs = cfg[state] as string[];
-        if (msgs) {
-          msgs.forEach((msg, i) => {
-            const isAudio = state === 'Audio';
-            let msgText = msg;
-            let audioName = null;
-            if (isAudio) {
-               try {
-                 const parsed = JSON.parse(msg);
-                 msgText = parsed.url;
-                 audioName = parsed.name;
-               } catch (e) { }
-            }
-            messagesToInsert.push({
-              config_id: meowData.id,
-              state: state,
-              message: msgText,
-              is_audio: isAudio,
-              audio_name: audioName,
-              sort_order: i
-            });
-          });
-        }
+    const messagesToInsert: any[] = [];
+    const timingsToInsert: any[] = [];
 
-        const timing = cfg.timingConfigs[state];
-        if (timing) {
-          timingsToInsert.push({
+    for (const state of states) {
+      const msgs = cfg[state] as string[];
+      if (msgs) {
+        msgs.forEach((msg, i) => {
+          const isAudio = state === 'Audio';
+          let msgText = msg;
+          let audioName = null;
+          if (isAudio) {
+             try {
+               const parsed = JSON.parse(msg);
+               msgText = parsed.url;
+               audioName = parsed.name;
+             } catch (e) { }
+          }
+          messagesToInsert.push({
             config_id: meowData.id,
             state: state,
-            message_duration_minutes: timing.messageDurationMinutes,
-            message_interval_minutes: timing.messageIntervalMinutes,
-            disabled: timing.disabled || false
+            message: msgText,
+            is_audio: isAudio,
+            audio_name: audioName,
+            sort_order: i
           });
-        }
+        });
       }
 
-      if (messagesToInsert.length > 0) {
-        await supabase.from('aiboard_meow_messages').insert(messagesToInsert);
+      const timing = cfg.timingConfigs[state];
+      if (timing) {
+        timingsToInsert.push({
+          config_id: meowData.id,
+          state: state,
+          message_duration_minutes: timing.messageDurationMinutes,
+          message_interval_minutes: timing.messageIntervalMinutes,
+          disabled: timing.disabled || false
+        });
       }
-      if (timingsToInsert.length > 0) {
-        await supabase.from('aiboard_meow_timing').insert(timingsToInsert);
-      }
+    }
+
+    if (messagesToInsert.length > 0) {
+      await supabase.from('aiboard_meow_messages').insert(messagesToInsert);
+    }
+    if (timingsToInsert.length > 0) {
+      await supabase.from('aiboard_meow_timing').insert(timingsToInsert);
     }
   }
 

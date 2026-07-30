@@ -54,13 +54,26 @@ export default function MeowDialogueManager() {
     setEditingIndex(null);
   };
 
+  // Prevents a single Enter press from double-firing handleAddNew: pressing
+  // Enter closes the input (setAddingNew(false)), which unmounts it while it
+  // still has focus, causing the browser to also fire onBlur → handleAddNew again.
+  const addSubmittedRef = useRef(false);
+
   const handleAddNew = () => {
+    if (addSubmittedRef.current) return;
+    addSubmittedRef.current = true;
+
     if (newText.trim()) {
       const updated = [...currentDialogues, newText.trim()];
       updateMeowConfig({ [activeState]: updated });
     }
     setNewText('');
     setAddingNew(false);
+  };
+
+  const handleOpenAddNew = () => {
+    addSubmittedRef.current = false;
+    setAddingNew(true);
   };
 
   const handleDelete = (index: number) => {
@@ -534,7 +547,7 @@ export default function MeowDialogueManager() {
               </motion.div>
             ) : (
               <button
-                onClick={() => setAddingNew(true)}
+                onClick={handleOpenAddNew}
                 className="w-full py-2 mt-4 flex items-center justify-center gap-3 text-sm font-bold text-slate-400 border-2 border-dashed border-slate-200 rounded-xl hover:bg-white hover:text-primary hover:border-primary/40 transition-all hover:shadow-sm cursor-pointer"
               >
                 <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 transition-colors">
