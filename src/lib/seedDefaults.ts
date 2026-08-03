@@ -82,6 +82,8 @@ export const DEFAULT_SIMULATOR_CONFIG = (moduleName: string) => ({
     "Ready to get started? 🚀\nGo ahead and ask me anything!",
   ],
   post_login_dialog_steps: ["Welcome back! 👋", 'How can I help you today?'],
+  welcome_back_text: 'Welcome back! 👋',
+  welcome_back_auto_close_ms: 6000,
 });
 
 // ─── Seed helpers ─────────────────────────────────────────────────────────────
@@ -132,6 +134,8 @@ export async function seedUserDefaults(userId: string): Promise<void> {
         module_name: cfg.module_name,
         title: cfg.title,
         subtitle: cfg.subtitle,
+        welcome_back_text: cfg.welcome_back_text,
+        welcome_back_auto_close_ms: cfg.welcome_back_auto_close_ms,
       }).select().single();
 
       if (simData) {

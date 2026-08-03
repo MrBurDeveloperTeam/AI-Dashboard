@@ -36,6 +36,8 @@ export type SimulatorConfig = {
   title: string;
   subtitle: string;
   prompts: [QuickPromptConfig, QuickPromptConfig, QuickPromptConfig, QuickPromptConfig]; // exactly 4 prompts based on current design
-  dialogSteps?: string[]; 
+  dialogSteps?: string[];
   postLoginDialogSteps?: string[];
+  welcomeBackText?: string;
+  welcomeBackAutoCloseMs?: number;
 };

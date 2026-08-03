@@ -80,6 +80,8 @@ function rowToSimulatorConfig(row: any): SimulatorConfig {
     prompts:              prompts,
     dialogSteps:          steps.filter((s: any) => !s.is_post_login).map((s: any) => s.step_text),
     postLoginDialogSteps: steps.filter((s: any) => s.is_post_login).map((s: any) => s.step_text),
+    welcomeBackText:      row.welcome_back_text ?? undefined,
+    welcomeBackAutoCloseMs: row.welcome_back_auto_close_ms ?? undefined,
   };
 }
 
@@ -324,6 +326,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           module_name:             activeModule,
           title:                   merged.title,
           subtitle:                merged.subtitle,
+          welcome_back_text:       merged.welcomeBackText ?? null,
+          welcome_back_auto_close_ms: merged.welcomeBackAutoCloseMs ?? null,
         }, { onConflict: 'user_id,module_name' })
         .select()
         .single();
