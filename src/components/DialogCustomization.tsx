@@ -339,7 +339,7 @@ export default function DialogCustomization() {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: -10, scale: 0.95 }}
         transition={{ duration: 0.3, ease: 'easeOut' }}
-        className="max-w-[280px] bg-white border border-slate-200 rounded-lg shadow-sm flex flex-col overflow-visible -mb-1 relative pointer-events-auto"
+        className="max-w-[280px] bg-white border border-slate-200 rounded-lg shadow-sm flex flex-col overflow-visible mb-4 relative pointer-events-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-4 text-sm font-semibold leading-relaxed text-slate-700 flex flex-col relative z-10 bg-white rounded-lg">
